@@ -47,16 +47,46 @@ def find_email(arglist):
         arg = arglist[i]
         if '@' in arg:
             email = arglist.pop(i)
-        elif arg.startswith('-'):
-            if (posix_option.fullmatch(arg) and 'v' in arg) \
-                    or (gnu_option.fullmatch(arg) and arg == '--verbose'):
+        elif posix_option.fullmatch(arg):
+            option = list(arg[1:])
+            if 'x' in option:
+                if len(arglist) > i+1 and option[-1] == 'x':
+                    execpath = arglist.pop(i + 1)
+                    absoluteloc = which(execpath)
+                    if absoluteloc is None:
+                        print('{color}error:{endcolor}'.format(color = text_colors.FAIL,
+                                                            endcolor = text_colors.NORMAL), end=' ')
+                        print('provided gpg executable {path} could not be found'.format(path = execpath))
+                        exit(1)
+                    else:
+                        options['gpg-executable'] = absoluteloc
+                        option.remove('x')
+                else:
+                    print('{color}error:{endcolor}'.format(color = text_colors.FAIL,
+                                                           endcolor = text_colors.NORMAL), end=' ')
+                    print('-{argument} must be followed by the name and/or path of your gpg executable'.format(
+                        argument = 'x'))
+                    exit(1)
+
+            if 'v' in option:
                 options['verbose'] = True
-            if (posix_option.fullmatch(arg) and 'i' in arg) \
-                    or (gnu_option.fullmatch(arg) and arg == '--import'):
+                option.remove('v')
+
+            if 'i' in option:
                 options['autoimport'] = True
-            if (posix_option.fullmatch(arg) and 'x' in arg) \
-                    or (gnu_option.fullmatch(arg) and arg == '--gpg-executable'):
-                if len(arglist) > i + 1 and re.search('x$', arg) is not None:
+                option.remove('v')
+
+            if len(option) > 0:
+                unexpected.append('-{}'.format(''.join(option)))
+            i += 1
+        elif gnu_option.fullmatch(arg):
+            option = arg[1:]
+            if option == '-verbose':
+                options['verbose'] = True
+            elif option == '-import':
+                options['autoimport'] = True
+            elif option == '-gpg-executable':
+                if len(arglist) > i+1:
                     execpath = arglist.pop(i + 1)
                     absoluteloc = which(execpath)
                     if absoluteloc is None:
@@ -69,9 +99,11 @@ def find_email(arglist):
                 else:
                     print('{color}error:{endcolor}'.format(color = text_colors.FAIL,
                                                            endcolor = text_colors.NORMAL), end=' ')
-                    print('{argument} must be followed by the name and/or path of your gpg executable'.format(
-                        argument = arg if arg == '--gpg-executable' else '-x'))
+                    print('-{argument} must be followed by the name and/or path of your gpg executable'.format(
+                        argument = arg))
                     exit(1)
+            else:
+                unexpected.append(arg)
             i += 1
         else:
             unexpected.append(arglist.pop(i))
@@ -205,7 +237,7 @@ if email is None:
 
 if options.get('verbose') and len(unexpected_args) > 0:
     print('unrecognized {arguments}: {arglist}'.format(
-        arguments = 'args' if len(unexpected_args) > 1 else 'argument',
+        arguments = 'options' if len(unexpected_args) > 1 else 'option',
         arglist = ', '.join(unexpected_args)
     ))
 
