@@ -6,46 +6,157 @@ import itertools
 import requests
 import sys
 import os
+import subprocess
+import re
+
+
+class text_colors:
+    SUCCESS = '\033[1;92m'
+    WARNING = '\033[93m'
+    FAIL = '\033[91m'
+    NORMAL = '\033[0m'
+
+
+def which(program):
+    def is_executable_file(filepath):
+        return os.path.isfile(filepath) and os.access(filepath, os.X_OK)
+
+    filepath, filename = os.path.split(program)
+    if filepath:
+        if is_executable_file(program):
+            return program
+    else:
+        for path in os.environ["PATH"].strip(os.pathsep).split(os.pathsep):
+            potential = os.path.join(path, program)
+            if is_executable_file(potential):
+                return potential
+    return None
 
 
 def find_email(arglist):
-    email = None
+    posix_option = re.compile('^-[a-zA-Z0-9]*$')
+    gnu_option = re.compile('^-{2}[a-zA-Z0-9][-a-zA-Z0-9]*$')
+    email, unexpected = None, []
+    options = {
+        'verbose': False,
+        'autoimport': False,
+        'gpg-executable': 'gpg'
+    }
     i = 0
     while i < len(arglist):
         arg = arglist[i]
         if '@' in arg:
             email = arglist.pop(i)
-        else:
+        elif arg.startswith('-'):
+            if (posix_option.fullmatch(arg) and 'v' in arg) \
+                    or (gnu_option.fullmatch(arg) and arg == '--verbose'):
+                options['verbose'] = True
+            if (posix_option.fullmatch(arg) and 'i' in arg) \
+                    or (gnu_option.fullmatch(arg) and arg == '--import'):
+                options['autoimport'] = True
+            if (posix_option.fullmatch(arg) and 'x' in arg) \
+                    or (gnu_option.fullmatch(arg) and arg == '--gpg-executable'):
+                if len(arglist) > i + 1 and re.search('x$', arg) is not None:
+                    execpath = arglist.pop(i + 1)
+                    absoluteloc = which(execpath)
+                    if absoluteloc is None:
+                        print('{color}error:{endcolor}'.format(color = text_colors.FAIL,
+                                                            endcolor = text_colors.NORMAL), end=' ')
+                        print('provided gpg executable {path} could not be found'.format(path = execpath))
+                        exit(1)
+                    else:
+                        options['gpg-executable'] = absoluteloc
+                else:
+                    print('{color}error:{endcolor}'.format(color = text_colors.FAIL,
+                                                           endcolor = text_colors.NORMAL), end=' ')
+                    print('{argument} must be followed by the name and/or path of your gpg executable'.format(
+                        argument = arg if arg == '--gpg-executable' else '-x'))
+                    exit(1)
             i += 1
-    return (email, arglist)
+        else:
+            unexpected.append(arglist.pop(i))
+
+    """
+    display options set on cmd line & exit:
+    options_set = [opt for opt, val in options.items()
+                    if val == True or (type(val) is str and val != 'gpg')]
+    print('email: {email}\n'
+          'options: {options}'.format(
+              email = email,
+              options = ', '.join(options_set) if len(options_set) > 0 else 'none'))
+    if options['gpg-executable'] != 'gpg':
+        print('executable: {exc}'.format(exc = options['gpg-executable']))
+    exit()
+    """
+    return (email, options, unexpected)
 
 
-def attempt_download(url, local_filename, verbose):
+def attempt_download(url, key_filename, **kwargs):
+    verbose = kwargs.get('verbose')
+    if verbose:
+        print('{target}\ntrying server...'.format(target = url), end=' ', flush=True)
     try:
         r = requests.get(url)
         if r.status_code == 200:
-            with open(local_filename, 'wb') as out:
+            with open(key_filename, 'wb') as out:
                 out.write(r.content)
-            indicate_success(url, local_filename)
+                if verbose: print('{style}success!{endstyle}\n'.format(
+                    style=text_colors.SUCCESS,
+                    endstyle=text_colors.NORMAL
+                ), end='')
+            on_success(url, key_filename, **kwargs)
         elif verbose:
-            print('request to {target} returned {status} {reason}'.format(
+            print('got response {status} {reason}'.format(
                 target = url, status = r.status_code, reason = r.reason
             ))
     except requests.exceptions.Timeout as ex:
         if verbose:
-            print('connection to {target} timed out'.format(target = url))
+            print('connection timed out'.format(target = url))
     except requests.exceptions.ConnectionError as ex:
         if verbose:
-            print('unable to connect to {target}'.format(target = url))
+            moreinfo = ''
+            match = re.match('^([A-Za-z]+://)?(([^/]+\.){2}[^/]+)(/.*)', url)
+            if match is not None:
+                server = match.groups()[1]
+                if server is not None and server.strip() != '':
+                    moreinfo = ' {}'.format(server)
+            print('can\'t find dns records for server{}'.format(moreinfo))
     except requests.exceptions.RequestException as ex:
         if verbose:
-            print('error contacting {target} ({details})'.format(url = target, details = ex.msg))
+            print('connection problem ({details})'.format(url = target, details = ex.msg))
 
 
-def indicate_success(url, filename):
+def on_success(url, key_file, **kwargs):
+    verbose = kwargs.get('verbose')
+    autoimport = kwargs.get('autoimport')
+    gpg = kwargs.get('gpg-executable')
+    if gpg is None:
+        gpg = 'gpg'
     if verbose:
         print('successfully retrieved public key from {source}'.format(source = url))
-    print('saved public key to {file}'.format(file = filename))
+    print('saved public key to {filename}'.format(filename = key_file))
+    if autoimport:
+        import_key = True
+    else:
+        while True:
+            user_response = input('import key in gpg? (yes/no) ').lower()
+            if user_response in ['yes', 'no']:
+                import_key = user_response == 'yes'
+                break
+            else:
+                print('please respond `yes\' or `no\'')
+    if import_key:
+        command = [gpg, '--import', key_file]
+        result = subprocess.call(command,
+                                 stdout=subprocess.DEVNULL,
+                                 stderr=subprocess.DEVNULL)
+        if result == 0:
+            print('successfully added key to your keychain')
+            exit()
+        else:
+            print('error adding key to keychain (code {code}). try adding the\n'
+                  'key manually by running:\n'
+                  '    gpg --import {file}'.format(code = result, file = filename))
     exit()
 
 
@@ -77,17 +188,26 @@ def local_zbase32(s):
     )
     return zb.decode('utf8')
 
-help_text = "usage: {program} [-v|--verbose] user@domain.com".format(
-    program = os.path.basename(sys.argv[0])
-)
+help_text = ['usage: {program} [-iv] [-x <gpg-path>] user@domain.com',
+             '',
+             'options:',
+             '    -i --import            automatically import new keys without prompting',
+             '    -v --verbose           print more information about progress and results',
+             '    -x --gpg-executable    use the provided path or executable instead of the',
+             '                           standard `gpg` (useful if gpg is named differently',
+             '                           or is not in your $PATH)']
 
-args = sys.argv[1:]
-email, arguments = find_email(args)
+email, options, unexpected_args = find_email(sys.argv[1:])
 if email is None:
-    print(help_text)
+    for line in help_text:
+        print(line.format(program = os.path.basename(sys.argv[0])))
     exit()
 
-verbose = '-v' in arguments or '--verbose' in arguments
+if options.get('verbose') and len(unexpected_args) > 0:
+    print('unrecognized {arguments}: {arglist}'.format(
+        arguments = 'args' if len(unexpected_args) > 1 else 'argument',
+        arglist = ', '.join(unexpected_args)
+    ))
 
 local_part, domain_part = email.split('@')
 hashed_fingerprint = local_zbase32(local_part)
@@ -100,8 +220,8 @@ second_potential = 'https://{domain}/.well-known/openpgpkey/hu/{hash32}?l={local
 )
 
 dest_file = '{}.asc'.format(email)
-attempt_download(first_potential, dest_file, verbose)
-attempt_download(second_potential, dest_file, verbose)
+attempt_download(first_potential, dest_file, **options)
+attempt_download(second_potential, dest_file, **options)
 
 failure_msg = 'unable to locate public key for {target}'.format(target = email)
 
@@ -116,6 +236,6 @@ failure_msg = 'unable to locate public key for {target}'.format(target = email)
 #       url2 = second_potential
 # )
 
-if verbose:
+if options.get('verbose'):
     print(failure_msg)
 exit(1)
