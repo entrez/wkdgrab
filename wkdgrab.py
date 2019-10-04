@@ -192,30 +192,30 @@ def on_success(url, key_file, **kwargs):
     exit()
 
 
-def encode_zbase32(bs):
-    ALPHABET = b'ybndrfg8ejkmcpqxot1uwisza345h769'
+def zb32_encode(bs):
+    ALPH= b'ybndrfg8ejkmcpqxot1uwisza345h769'
     result = bytearray()
     for word in itertools.zip_longest(*([iter(bs)] * 5)):
         padding_count = word.count(None)
         n = functools.reduce(lambda x, y: (x << 8) + (y or 0), word, 0)
         for i in range(0, (40 - 8 * padding_count), 5):
-            result.append(ALPHABET[(n >> (35 - i)) & 0x1F])
+            result.append(ALPH[(n >> (35 - i)) & 0x1F])
     return result
 
 
-def local_zbase32(s):
+def zbase32(s):
     '''
-    used to locate public key filename on server
+    uses "local part" of email to compute hash used to locate public key filename on server
 
     e.g. for me@entrez.cc:
 
-    >>> local_zbase32('me')
+    >>> zbase32('me')
     's8y7oh5xrdpu9psba3i5ntk64ohouhga'
 
     https://entrez.cc/.well-known/openpgpkey/hu/s8y7oh5xrdpu9psba3i5ntk64ohouhga?l=me
     '''
     sb = s.lower().encode('utf8')
-    zb = encode_zbase32(
+    zb = zb32_encode(
         hashlib.sha1(sb).digest()
     )
     return zb.decode('utf8')
@@ -242,7 +242,7 @@ if options.get('verbose') and len(unexpected_args) > 0:
     ))
 
 local_part, domain_part = email.split('@')
-hashed_fingerprint = local_zbase32(local_part)
+hashed_fingerprint = zbase32(local_part)
 
 first_potential = 'https://openpgpkey.{domain}/.well-known/openpgpkey/{domain}/hu/{hash32}?l={local}'.format(
     domain = domain_part, local = local_part, hash32 = hashed_fingerprint
@@ -251,7 +251,7 @@ second_potential = 'https://{domain}/.well-known/openpgpkey/hu/{hash32}?l={local
     domain = domain_part, local = local_part, hash32 = hashed_fingerprint
 )
 
-dest_file = '{}.asc'.format(email)
+dest_file = '{}.key'.format(email)
 attempt_download(first_potential, dest_file, **options)
 attempt_download(second_potential, dest_file, **options)
 
