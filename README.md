@@ -1,4 +1,6 @@
 ## wkdgrab
+check for web key directory-hosted gpg keys associated with a given email
+address. for more information, see [this memo](https://tools.ietf.org/html/draft-koch-openpgp-webkey-service).
 
 ### usage
 `wkdgrab.py [-iv] [-x <gpg-path>] user@domain.com`
