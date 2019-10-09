@@ -251,7 +251,7 @@ second_potential = 'https://{domain}/.well-known/openpgpkey/hu/{hash32}?l={local
     domain = domain_part, local = local_part, hash32 = hashed_fingerprint
 )
 
-dest_file = '{}.key'.format(email)
+dest_file = '{}.gpg'.format(email)
 attempt_download(first_potential, dest_file, **options)
 attempt_download(second_potential, dest_file, **options)
 
