@@ -227,11 +227,13 @@ def zbase32(s):
     )
     return zb.decode('utf8')
 
-help_text = ['usage: {program} [-iv] [-x <gpg-path>] user@domain.com',
+help_text = ['usage: {program} [-iv | -p] [-x <gpg-path>] user@domain.com',
              '',
              'options:',
              '    -i --import            automatically import new keys without prompting',
              '    -v --verbose           print more information about progress and results',
+             '    -p --print-path        find/print allowed key filepaths & exit without',
+             '                           contacting the server or downloading keys',
              '    -x --gpg-executable    use the provided path or executable instead of the',
              '                           standard `gpg` (useful if gpg is named differently',
              '                           or is not in your $PATH)']
