@@ -40,6 +40,7 @@ def find_email(arglist):
     options = {
         'verbose': False,
         'autoimport': False,
+        'find_path_only': False,
         'gpg-executable': 'gpg'
     }
     i = 0
@@ -72,6 +73,10 @@ def find_email(arglist):
                 options['verbose'] = True
                 option.remove('v')
 
+            if 'p' in option:
+                options['find_path_only'] = True
+                option.remove('p')
+
             if 'i' in option:
                 options['autoimport'] = True
                 option.remove('v')
@@ -85,6 +90,8 @@ def find_email(arglist):
                 options['verbose'] = True
             elif option == '-import':
                 options['autoimport'] = True
+            elif option == '-print-path':
+                options['find_path_only'] = True
             elif option == '-gpg-executable':
                 if len(arglist) > i+1:
                     execpath = arglist.pop(i + 1)
@@ -244,11 +251,24 @@ if options.get('verbose') and len(unexpected_args) > 0:
 local_part, domain_part = email.split('@')
 hashed_fingerprint = zbase32(local_part)
 
-first_potential = 'https://openpgpkey.{domain}/.well-known/openpgpkey/{domain}/hu/{hash32}?l={local}'.format(
+path1 = '.well-known/openpgpkey/{domain}/hu/{hash32}?l={local}'.format(
     domain = domain_part, local = local_part, hash32 = hashed_fingerprint
 )
-second_potential = 'https://{domain}/.well-known/openpgpkey/hu/{hash32}?l={local}'.format(
-    domain = domain_part, local = local_part, hash32 = hashed_fingerprint
+
+path2 = '.well-known/openpgpkey/hu/{hash32}?l={local}'.format(
+    local = local_part, hash32 = hashed_fingerprint
+)
+
+if options['find_path_only']:
+    print(path1)
+    print(path2)
+    exit()
+
+first_potential = 'https://openpgpkey.{domain}/{path}'.format(
+    domain = domain_part, path = path1
+)
+second_potential = 'https://{domain}/{path}'.format(
+    domain = domain_part, path = path2
 )
 
 dest_file = '{}.gpg'.format(email)
