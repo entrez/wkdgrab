@@ -79,7 +79,7 @@ def find_email(arglist):
 
             if 'i' in option:
                 options['autoimport'] = True
-                option.remove('v')
+                option.remove('i')
 
             if len(option) > 0:
                 unexpected.append('-{}'.format(''.join(option)))
