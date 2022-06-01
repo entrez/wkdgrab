@@ -1,8 +1,4 @@
-<div align="center">
-    <img alt="wkdgrab" src="https://camo.githubusercontent.com/27f85956a324b06bee1199faf4d4679959d38534/68747470733a2f2f3078302e73742f697455302e706e67" />
-</div>
-
-***
+# wkdgrab
 
 Check for (& import!) Web Key Directory-hosted GPG keys associated with a given email
 address. For more information, see [this memo](https://tools.ietf.org/html/draft-koch-openpgp-webkey-service).
